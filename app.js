@@ -12,7 +12,10 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
 
 const app = express();
-const port = 3000;
+let port = process.env.PORT;
+if (port === null || port == "") {
+  port = 3000;
+}
 
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -27,12 +30,13 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser:true, useUnifiedTopology: true, useCreateIndex: true});
+mongoose.connect("mongodb+srv://admin-israel:test123@cluster0.ibsze.mongodb.net/userDB?retryWrites=true&w=majority", {useNewUrlParser:true, useUnifiedTopology: true, useCreateIndex: true});
 
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  googleId: String
+  googleId: String,
+  secret: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -55,7 +59,7 @@ passport.deserializeUser((id, done) => {
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/secrets"
+    callbackURL: "https://israelsecreapp001.herokuapp.com/auth/google/secrets"
   },
   function(accessToken, refreshToken, profile, cb) {
     User.findOrCreate({ googleId: profile.id }, (err, user) => {
@@ -88,11 +92,40 @@ app.get("/register", (req, res) => {
 })
 
 app.get("/secret", (req, res) => {
+  User.find({"secret": {$ne: null}}, (err, foundUser) => {
+    if (err) {
+      console.log(err);
+    }else {
+      if (foundUser) {
+        res.render("secrets", {userWithSecrets: foundUser});
+      }
+    }
+  })
+})
+
+app.get("/submit", (req, res) => {
   if (req.isAuthenticated()) {
-    res.render("secrets");
+    res.render("submit");
   }else {
     res.redirect("/login");
   }
+})
+
+app.post("/submit", (req, res) => {
+  const userSecret = req.body.secret;
+
+  User.findById(req.user.id, (err, foundUser) => {
+    if (err) {
+      console.log(err);
+    }else {
+      if (foundUser) {
+        foundUser.secret = userSecret;
+        foundUser.save(() => {
+          res.redirect("/secret");
+        })
+      }
+    }
+  })
 })
 
 app.get("/logout", (req, res) => {
